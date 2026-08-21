@@ -48,7 +48,7 @@ threading.Thread(target=run_keep_alive, daemon=True).start()
 # CONFIGURATION & ECONOMY
 # ============================================================
 
-BOT_TOKEN = "6539038704:AAEH1wnpI14F6HWG8A9xa3mD4sz4jY_xrj0"
+BOT_TOKEN = "6539038704:AAHmcuPjCpci4jhpa_WxHYqjJQArR2JvQlk"
 
 # Telegram Numeric User ID
 ADMIN_ID = 5504272381  # আপনার Telegram Numeric User ID
