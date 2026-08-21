@@ -58,7 +58,7 @@ keep_alive_thread.start()
 BOT_TOKEN = "6539038704:AAHmcuPjCpci4jhpa_WxHYqjJQArR2JvQlk"
 
 # Telegram Numeric User ID of Owner/Admin
-ADMIN_ID = 6539038704
+ADMIN_ID = 5504272381
 
 # Owner Profile Details
 SUPPORT_USERNAME = "@forhadkhandakar"
