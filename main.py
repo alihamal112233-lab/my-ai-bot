@@ -1,6 +1,6 @@
 # ============================================================
 # PREMIUM MULTI AI TELEGRAM BOT
-# FULL SINGLE-FILE PRODUCTION VERSION (CLOUD / PYHOST READY)
+# FULL SINGLE-FILE VERSION (CLOUD / RENDER COMPATIBLE)
 # ============================================================
 
 import os
@@ -11,8 +11,35 @@ import threading
 import requests
 import telebot
 
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from telebot import types
+
+
+# ============================================================
+# KEEP-ALIVE DUMMY WEB SERVER FOR RENDER / UPTIMEROBOT
+# ============================================================
+
+class KeepAliveHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"Telegram Multi-AI Bot is Running 24/7!")
+
+    def log_message(self, format, *args):
+        return  # Suppress logging for keep-alive pings
+
+
+def run_keep_alive():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), KeepAliveHandler)
+    print(f"[WEB SERVER] Listening on port {port}")
+    server.serve_forever()
+
+
+# Start Keep-Alive Server in Background
+threading.Thread(target=run_keep_alive, daemon=True).start()
 
 
 # ============================================================
@@ -39,7 +66,7 @@ FORCE_BOTS = [
     }
 ]
 
-# Relative Paths for Storage (Compatible with Linux, Windows, VPS, PyHost Cloud)
+# Relative Paths for Storage
 DATA_FILE = "multi_ai_bot_data.json"
 API_FILE = "apis.json"
 
@@ -196,7 +223,7 @@ load_apis()
 
 
 # ============================================================
-# USER MANAGEMENT & VERIFICATION HELPERS
+# USER & VERIFICATION HELPERS
 # ============================================================
 
 def add_user(user_id):
@@ -234,7 +261,7 @@ def total_users():
 
 
 # ============================================================
-# REFERRAL SYSTEM HELPERS
+# REFERRAL HELPERS
 # ============================================================
 
 def get_bot_username():
@@ -299,30 +326,15 @@ def referral_count(user_id):
 
 
 # ============================================================
-# UI KEYBOARDS & LAYOUTS
+# KEYBOARDS & MESSAGES
 # ============================================================
 
 def force_join_keyboard():
     keyboard = types.InlineKeyboardMarkup(row_width=1)
     for target in FORCE_BOTS:
-        keyboard.add(
-            types.InlineKeyboardButton(
-                target["title"],
-                url=target["url"]
-            )
-        )
-    keyboard.add(
-        types.InlineKeyboardButton(
-            "✅ আমি সবগুলোতে Start দিয়েছি",
-            callback_data="verify_join"
-        )
-    )
-    keyboard.add(
-        types.InlineKeyboardButton(
-            "🆘 Support",
-            url=f"https://t.me/{SUPPORT_USERNAME.replace('@', '')}"
-        )
-    )
+        keyboard.add(types.InlineKeyboardButton(target["title"], url=target["url"]))
+    keyboard.add(types.InlineKeyboardButton("✅ আমি সবগুলোতে Start দিয়েছি", callback_data="verify_join"))
+    keyboard.add(types.InlineKeyboardButton("🆘 Support", url=f"https://t.me/{SUPPORT_USERNAME.replace('@', '')}"))
     return keyboard
 
 
@@ -349,10 +361,6 @@ def main_menu():
     return keyboard
 
 
-# ============================================================
-# PROFILE PHOTO HANDLER
-# ============================================================
-
 def get_profile_photo(user_id):
     try:
         photos = bot.get_user_profile_photos(user_id, limit=1)
@@ -372,10 +380,6 @@ def get_profile_photo(user_id):
         print("[PROFILE PHOTO ERROR]", e)
         return None
 
-
-# ============================================================
-# WELCOME MESSAGE LOGIC
-# ============================================================
 
 def send_welcome(message):
     user = message.from_user
@@ -403,33 +407,20 @@ def send_welcome(message):
     try:
         if photo and os.path.exists(photo):
             with open(photo, "rb") as f:
-                bot.send_photo(
-                    message.chat.id,
-                    f,
-                    caption=text,
-                    reply_markup=main_menu()
-                )
+                bot.send_photo(message.chat.id, f, caption=text, reply_markup=main_menu())
             try:
                 os.remove(photo)
             except Exception:
                 pass
         else:
-            bot.send_message(
-                message.chat.id,
-                text,
-                reply_markup=main_menu()
-            )
+            bot.send_message(message.chat.id, text, reply_markup=main_menu())
     except Exception as e:
         print("[WELCOME ERROR]", e)
-        bot.send_message(
-            message.chat.id,
-            text,
-            reply_markup=main_menu()
-        )
+        bot.send_message(message.chat.id, text, reply_markup=main_menu())
 
 
 # ============================================================
-# COMMAND HANDLERS
+# BOT COMMANDS & HANDLERS
 # ============================================================
 
 @bot.message_handler(commands=["start"])
@@ -455,11 +446,7 @@ def start(message):
 প্রথমে নিচের Bot গুলোতে Visit/Start করুন এবং ভেরিফাই বাটনে চাপ দিন।
 ━━━━━━━━━━━━━━━━━━
 """
-        bot.send_message(
-            message.chat.id,
-            text,
-            reply_markup=force_join_keyboard()
-        )
+        bot.send_message(message.chat.id, text, reply_markup=force_join_keyboard())
         return
 
     send_welcome(message)
@@ -510,10 +497,6 @@ def cancel(message):
 
     bot.send_message(message.chat.id, "🏠 <b>Main Menu</b>", reply_markup=main_menu())
 
-
-# ============================================================
-# MAIN MENU BUTTON HANDLERS
-# ============================================================
 
 @bot.message_handler(func=lambda m: m.text == "🤖 AI CHAT")
 def ai_chat(message):
@@ -694,10 +677,6 @@ def support_id_command(message):
     )
 
 
-# ============================================================
-# IDENTITY LOGIC
-# ============================================================
-
 def is_identity_question(text):
     text = text.lower().strip()
     keywords = [
@@ -719,7 +698,7 @@ def identity_answer():
 
 
 # ============================================================
-# API RESPONSE PROCESSING & ENGINE
+# API CALL & HANDLING
 # ============================================================
 
 def extract_response(data):
@@ -758,7 +737,7 @@ def clean_response(text):
         return None
 
     text = str(text).strip()
-    if "</think>" in text:
+     if "</think>" in text:
         text = text.split("</think>", 1)[1].strip()
 
     if "<think>" in text and "</think>" not in text:
@@ -873,7 +852,7 @@ def send_answer(chat_id, result):
 
 
 # ============================================================
-# USER MESSAGE HANDLERS
+# USER TEXT HANDLER
 # ============================================================
 
 @bot.message_handler(content_types=["text"])
@@ -952,7 +931,7 @@ def unsupported_message(message):
 
 
 # ============================================================
-# MAIN LOOP / RUNNER
+# BOT RUNNER
 # ============================================================
 
 def run_bot():
