@@ -737,7 +737,7 @@ def clean_response(text):
         return None
 
     text = str(text).strip()
-     if "</think>" in text:
+    if "</think>" in text:
         text = text.split("</think>", 1)[1].strip()
 
     if "<think>" in text and "</think>" not in text:
