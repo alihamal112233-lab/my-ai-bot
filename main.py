@@ -1,6 +1,6 @@
 # ============================================================
-# PREMIUM MULTI AI TELEGRAM BOT
-# FULL SINGLE-FILE VERSION (CLOUD / RENDER COMPATIBLE)
+# PREMIUM MULTI AI TELEGRAM BOT + POINTS & ADMIN PANEL
+# FULL SINGLE-FILE PRODUCTION VERSION (RENDER / CLOUD READY)
 # ============================================================
 
 import os
@@ -17,7 +17,7 @@ from telebot import types
 
 
 # ============================================================
-# KEEP-ALIVE DUMMY WEB SERVER FOR RENDER / UPTIMEROBOT
+# KEEP-ALIVE SERVER (FOR RENDER & UPTIMEROBOT)
 # ============================================================
 
 class KeepAliveHandler(BaseHTTPRequestHandler):
@@ -28,31 +28,39 @@ class KeepAliveHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"Telegram Multi-AI Bot is Running 24/7!")
 
     def log_message(self, format, *args):
-        return  # Suppress logging for keep-alive pings
+        return
 
 
 def run_keep_alive():
     port = int(os.environ.get("PORT", 8080))
-    server = HTTPServer(("0.0.0.0", port), KeepAliveHandler)
-    print(f"[WEB SERVER] Listening on port {port}")
-    server.serve_forever()
+    try:
+        server = HTTPServer(("0.0.0.0", port), KeepAliveHandler)
+        print(f"[WEB SERVER] Running on port {port}")
+        server.serve_forever()
+    except Exception as e:
+        print(f"[WEB SERVER ERROR] {e}")
 
 
-# Start Keep-Alive Server in Background
 threading.Thread(target=run_keep_alive, daemon=True).start()
 
 
 # ============================================================
-# CONFIGURATION
+# CONFIGURATION & ECONOMY
 # ============================================================
 
 BOT_TOKEN = "6539038704:AAEH1wnpI14F6HWG8A9xa3mD4sz4jY_xrj0"
 
-# Owner & Support Information
+# Telegram Numeric User ID
+ADMIN_ID = 5504272381  # আপনার Telegram Numeric User ID
+
 SUPPORT_USERNAME = "@forhadkhandakar"
 OWNER_NAME = "Forhad Khandakar"
 
-# Force Task / Follow Bots
+# Point System Settings
+INITIAL_POINTS = 100      # নতুন ইউজারের জয়েনিং বোনাস (১০০ পয়েন্ট)
+COST_PER_MESSAGE = 3      # প্রতি মেসেজে খরচ (৩ পয়েন্ট)
+REFERRAL_POINTS = 50      # প্রতি রেফারে বোনাস (৫০ পয়েন্ট)
+
 FORCE_BOTS = [
     {
         "title": "🤖 Number Info Bot",
@@ -66,11 +74,9 @@ FORCE_BOTS = [
     }
 ]
 
-# Relative Paths for Storage
 DATA_FILE = "multi_ai_bot_data.json"
 API_FILE = "apis.json"
 
-# Execution Settings
 API_TIMEOUT = 12
 MAX_WORKERS = 7
 
@@ -80,74 +86,35 @@ MAX_WORKERS = 7
 # ============================================================
 
 DEFAULT_APIS = [
-    {
-        "name": "Gemini",
-        "url": "https://r-bots-free-apis.co08.art/api/gemini",
-        "enabled": True,
-        "prompt": ""
-    },
-    {
-        "name": "DeepSeek R1",
-        "url": "https://r-bots-free-apis.co08.art/api/deepseek-r1",
-        "enabled": True,
-        "prompt": ""
-    },
-    {
-        "name": "DeepSeek V3",
-        "url": "https://r-bots-free-apis.co08.art/api/deepseek-v3",
-        "enabled": True,
-        "prompt": ""
-    },
-    {
-        "name": "Cohere",
-        "url": "https://r-bots-free-apis.co08.art/api/cohere",
-        "enabled": True,
-        "prompt": ""
-    },
-    {
-        "name": "Qwen",
-        "url": "https://r-bots-free-apis.co08.art/api/qwen",
-        "enabled": True,
-        "prompt": ""
-    },
-    {
-        "name": "Llama Meta",
-        "url": "https://r-bots-free-apis.co08.art/api/llama-meta",
-        "enabled": True,
-        "prompt": ""
-    },
-    {
-        "name": "GPTLogic",
-        "url": "https://r-bots-free-apis.co08.art/api/gptlogic",
-        "enabled": True,
-        "prompt": "be friendly"
-    }
+    {"name": "Gemini", "url": "https://r-bots-free-apis.co08.art/api/gemini", "enabled": True, "prompt": ""},
+    {"name": "DeepSeek R1", "url": "https://r-bots-free-apis.co08.art/api/deepseek-r1", "enabled": True, "prompt": ""},
+    {"name": "DeepSeek V3", "url": "https://r-bots-free-apis.co08.art/api/deepseek-v3", "enabled": True, "prompt": ""},
+    {"name": "Cohere", "url": "https://r-bots-free-apis.co08.art/api/cohere", "enabled": True, "prompt": ""},
+    {"name": "Qwen", "url": "https://r-bots-free-apis.co08.art/api/qwen", "enabled": True, "prompt": ""},
+    {"name": "Llama Meta", "url": "https://r-bots-free-apis.co08.art/api/llama-meta", "enabled": True, "prompt": ""},
+    {"name": "GPTLogic", "url": "https://r-bots-free-apis.co08.art/api/gptlogic", "enabled": True, "prompt": "be friendly"}
 ]
 
 
 # ============================================================
-# BOT INITIALIZATION & LOCKS
+# BOT INITIALIZATION
 # ============================================================
 
-bot = telebot.TeleBot(
-    BOT_TOKEN,
-    parse_mode="HTML",
-    threaded=True,
-    num_threads=12
-)
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML", threaded=True, num_threads=12)
 
 data_lock = threading.RLock()
 api_lock = threading.RLock()
 
 
 # ============================================================
-# DATA STORAGE & PERSISTENCE
+# DATA PERSISTENCE
 # ============================================================
 
 DATA = {
     "users": [],
     "verified_users": [],
     "blocked": [],
+    "points": {},
     "referrals": {},
     "ref_by": {},
     "stats": {
@@ -223,7 +190,7 @@ load_apis()
 
 
 # ============================================================
-# USER & VERIFICATION HELPERS
+# USER & POINT HELPERS
 # ============================================================
 
 def add_user(user_id):
@@ -233,8 +200,28 @@ def add_user(user_id):
         if user_id not in users:
             users.append(user_id)
             changed = True
+
+        points = DATA.setdefault("points", {})
+        if str(user_id) not in points:
+            points[str(user_id)] = INITIAL_POINTS
+            changed = True
+
     if changed:
         save_data()
+
+
+def get_user_points(user_id):
+    with data_lock:
+        return DATA.get("points", {}).get(str(user_id), INITIAL_POINTS)
+
+
+def modify_user_points(user_id, amount):
+    with data_lock:
+        points = DATA.setdefault("points", {})
+        current = points.get(str(user_id), INITIAL_POINTS)
+        points[str(user_id)] = max(0, current + amount)
+        save_data()
+        return points[str(user_id)]
 
 
 def is_verified(user_id):
@@ -298,6 +285,7 @@ def process_referral(user_id, start_parameter):
     with data_lock:
         ref_by = DATA.setdefault("ref_by", {})
         referrals = DATA.setdefault("referrals", {})
+        points = DATA.setdefault("points", {})
 
         if str(user_id) in ref_by:
             return
@@ -306,15 +294,19 @@ def process_referral(user_id, start_parameter):
         inviter_key = str(inviter)
         referrals[inviter_key] = referrals.get(inviter_key, 0) + 1
 
+        # বোনাস পয়েন্ট যোগ
+        points[inviter_key] = points.get(inviter_key, INITIAL_POINTS) + REFERRAL_POINTS
+
     save_data()
 
     try:
         bot.send_message(
             inviter,
-            f"🎉 <b>NEW REFERRAL!</b>\n\n"
-            f"একজন নতুন user আপনার referral link দিয়ে bot-এ এসেছে।\n\n"
-            f"👤 User ID: <code>{user_id}</code>\n"
-            f"🎁 আপনার মোট referral: <b>{DATA['referrals'].get(str(inviter), 0)}</b>"
+            f"🎉 <b>NEW REFERRAL JOINED!</b>\n\n"
+            f"একজন নতুন user আপনার referral link দিয়ে এসেছে।\n\n"
+            f"🎁 আপনি পেয়েছেন: <b>+{REFERRAL_POINTS} Points!</b>\n"
+            f"💰 আপনার বর্তমান পয়েন্ট: <b>{get_user_points(inviter)}</b>\n"
+            f"👥 মোট রেফারেল: <b>{DATA['referrals'].get(str(inviter), 0)}</b>"
         )
     except Exception:
         pass
@@ -326,7 +318,7 @@ def referral_count(user_id):
 
 
 # ============================================================
-# KEYBOARDS & MESSAGES
+# UI & KEYBOARDS
 # ============================================================
 
 def force_join_keyboard():
@@ -342,9 +334,9 @@ def force_join_message():
     return f"""
 <b>🔐 ACCESS VERIFICATION</b>
 ━━━━━━━━━━━━━━━━━━
-বটটি সম্পূর্ণ ফ্রিতে ব্যবহার করতে নিচের <b>{len(FORCE_BOTS)}টি Bot</b>-এ গিয়ে Start দিন।
+বটটি ফ্রিতে ব্যবহার করতে নিচের <b>{len(FORCE_BOTS)}টি Bot</b>-এ গিয়ে Start দিন।
 
-নিচের বাটনগুলোতে ক্লিক করে Start দেওয়া শেষ হলে 
+Start দেওয়া শেষ হলে নিচে 
 <b>✅ আমি সবগুলোতে Start দিয়েছি</b> বাটনে চাপ দিন।
 ━━━━━━━━━━━━━━━━━━
 🔒 <b>Secure Access</b>
@@ -385,6 +377,7 @@ def send_welcome(message):
     user = message.from_user
     user_id = user.id
     name = html.escape(user.first_name or "Friend")
+    points = get_user_points(user_id)
 
     text = f"""
 <b>🤖 PREMIUM AI ASSISTANT</b>
@@ -393,15 +386,13 @@ def send_welcome(message):
 
 আপনি এখন আমাদের Premium AI Assistant ব্যবহার করতে পারবেন।
 
-⚡ <b>7 AI Engines</b>
-🚀 <b>Parallel Processing</b>
-🏆 <b>First Valid Response</b>
-🔄 <b>Automatic Fallback</b>
-🛡 <b>Smart Error Handling</b>
+🎁 জয়েনিং বোনাস: <b>{INITIAL_POINTS} Points</b> যুক্ত হয়েছে!
+💬 প্রতি প্রশ্নে খরচ: <b>{COST_PER_MESSAGE} Points</b>
+━━━━━━━━━━━━━━━━━━
+💰 বর্তমান ব্যালেন্স: <b>{points} Points</b>
+🔗 রেফারেল সংখ্যা: <b>{referral_count(user_id)} জন</b>
 ━━━━━━━━━━━━━━━━━━
 নিচের <b>🤖 AI CHAT</b> বাটনে চাপ দিয়ে যেকোনো প্রশ্ন করুন।
-━━━━━━━━━━━━━━━━━━
-🔗 Referral: <b>{referral_count(user_id)}</b> জন
 """
     photo = get_profile_photo(user_id)
     try:
@@ -420,7 +411,285 @@ def send_welcome(message):
 
 
 # ============================================================
-# BOT COMMANDS & HANDLERS
+# ADMIN PANEL LOGIC & UI
+# ============================================================
+
+def admin_keyboard():
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    keyboard.add(
+        types.InlineKeyboardButton("📊 Live Stats", callback_data="admin_stats"),
+        types.InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast")
+    )
+    keyboard.add(
+        types.InlineKeyboardButton("➕ Add Points", callback_data="admin_add_pts"),
+        types.InlineKeyboardButton("➖ Deduct Points", callback_data="admin_deduct_pts")
+    )
+    keyboard.add(
+        types.InlineKeyboardButton("🔍 Check User", callback_data="admin_chk_user"),
+        types.InlineKeyboardButton("📁 Export DB", callback_data="admin_export")
+    )
+    keyboard.add(
+        types.InlineKeyboardButton("🚫 Ban User", callback_data="admin_ban"),
+        types.InlineKeyboardButton("✅ Unban User", callback_data="admin_unban")
+    )
+    keyboard.add(
+        types.InlineKeyboardButton("🤖 Manage AI Engines", callback_data="admin_apis")
+    )
+    return keyboard
+
+
+@bot.message_handler(commands=["admin"])
+def admin_panel(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "🚫 <b>Access Denied:</b> আপনি অ্যাডমিন নন!")
+        return
+
+    bot.send_message(
+        message.chat.id,
+        f"""
+<b>👑 OWNER / ADMIN CONTROL PANEL</b>
+━━━━━━━━━━━━━━━━━━
+স্বাগতম <b>{OWNER_NAME}</b>!
+নিচের অপশনগুলো দিয়ে আপনি পুরো বট ও পয়েন্ট নিয়ন্ত্রণ করতে পারেন।
+━━━━━━━━━━━━━━━━━━
+""",
+        reply_markup=admin_keyboard()
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("admin_"))
+def admin_callbacks(call):
+    if call.from_user.id != ADMIN_ID:
+        bot.answer_callback_query(call.id, "🚫 Access Denied!", show_alert=True)
+        return
+
+    action = call.data
+
+    if action == "admin_stats":
+        with data_lock:
+            total_u = len(DATA.get("users", []))
+            verified_u = len(DATA.get("verified_users", []))
+            blocked_u = len(DATA.get("blocked", []))
+            msgs = DATA.get("stats", {}).get("messages", 0)
+            succ = DATA.get("stats", {}).get("success", 0)
+            fail = DATA.get("stats", {}).get("failed", 0)
+            reqs = DATA.get("stats", {}).get("api_requests", 0)
+
+        text = f"""
+<b>📊 LIVE BOT ANALYTICS</b>
+━━━━━━━━━━━━━━━━━━
+👥 <b>Total Users:</b> {total_u}
+✅ <b>Verified Users:</b> {verified_u}
+🚫 <b>Blocked Users:</b> {blocked_u}
+━━━━━━━━━━━━━━━━━━
+💬 <b>Total Messages:</b> {msgs}
+🏆 <b>AI Success:</b> {succ}
+❌ <b>AI Failed:</b> {fail}
+⚡ <b>API Calls:</b> {reqs}
+━━━━━━━━━━━━━━━━━━
+🟢 <b>Server Status:</b> Running 24/7
+"""
+        bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=admin_keyboard())
+
+    elif action == "admin_broadcast":
+        msg = bot.send_message(call.message.chat.id, "📢 <b>ব্রডকাস্ট মেসেজটি লিখে পাঠান:</b>\n(বাতিল করতে /cancel লিখুন)")
+        bot.register_next_step_handler(msg, process_broadcast)
+
+    elif action == "admin_add_pts":
+        msg = bot.send_message(call.message.chat.id, "➕ <b>ইউজার আইডি এবং পয়েন্ট দিন:</b>\n\nফরম্যাট: <code>User_ID Amount</code>\nউদাহরণ: <code>12345678 100</code>\n(বাতিল করতে /cancel লিখুন)")
+        bot.register_next_step_handler(msg, process_add_points)
+
+    elif action == "admin_deduct_pts":
+        msg = bot.send_message(call.message.chat.id, "➖ <b>ইউজার আইডি এবং মাইনাস করার পয়েন্ট দিন:</b>\n\nফরম্যাট: <code>User_ID Amount</code>\nউদাহরণ: <code>12345678 50</code>\n(বাতিল করতে /cancel লিখুন)")
+        bot.register_next_step_handler(msg, process_deduct_points)
+
+    elif action == "admin_chk_user":
+        msg = bot.send_message(call.message.chat.id, "🔍 <b>ইউজারের Telegram ID পাঠান:</b>\n(বাতিল করতে /cancel লিখুন)")
+        bot.register_next_step_handler(msg, process_check_user)
+
+    elif action == "admin_ban":
+        msg = bot.send_message(call.message.chat.id, "🚫 <b>ব্যান করতে ইউজারের Telegram ID পাঠান:</b>\n(বাতিল করতে /cancel লিখুন)")
+        bot.register_next_step_handler(msg, process_ban_user)
+
+    elif action == "admin_unban":
+        msg = bot.send_message(call.message.chat.id, "✅ <b>আনব্যান করতে ইউজারের Telegram ID পাঠান:</b>\n(বাতিল করতে /cancel লিখুন)")
+        bot.register_next_step_handler(msg, process_unban_user)
+
+    elif action == "admin_export":
+        bot.answer_callback_query(call.id, "📤 ডাটাবেজ পাঠানো হচ্ছে...")
+        try:
+            if os.path.exists(DATA_FILE):
+                with open(DATA_FILE, "rb") as f:
+                    bot.send_document(call.message.chat.id, f, caption="📁 <b>User Database Backup</b>")
+            else:
+                bot.send_message(call.message.chat.id, "❌ ডাটা ফাইল পাওয়া যায়নি।")
+        except Exception as e:
+            bot.send_message(call.message.chat.id, f"❌ Export Error: {e}")
+
+    elif action == "admin_apis":
+        kb = types.InlineKeyboardMarkup(row_width=2)
+        with api_lock:
+            for idx, api in enumerate(APIS):
+                status_icon = "🟢" if api.get("enabled", True) else "🔴"
+                kb.add(types.InlineKeyboardButton(f"{status_icon} {api['name']}", callback_data=f"toggle_api_{idx}"))
+        kb.add(types.InlineKeyboardButton("🔙 Back to Admin", callback_data="admin_back"))
+        bot.edit_message_text("<b>🤖 AI ENGINE STATUS (ক্লিক করে On/Off করুন):</b>", call.message.chat.id, call.message.message_id, reply_markup=kb)
+
+    elif action == "admin_back":
+        bot.edit_message_text("<b>👑 ADMIN CONTROL PANEL</b>", call.message.chat.id, call.message.message_id, reply_markup=admin_keyboard())
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("toggle_api_"))
+def toggle_api_callback(call):
+    if call.from_user.id != ADMIN_ID:
+        return
+    idx = int(call.data.replace("toggle_api_", ""))
+    with api_lock:
+        if 0 <= idx < len(APIS):
+            APIS[idx]["enabled"] = not APIS[idx].get("enabled", True)
+            save_apis()
+
+    kb = types.InlineKeyboardMarkup(row_width=2)
+    with api_lock:
+        for i, api in enumerate(APIS):
+            status_icon = "🟢" if api.get("enabled", True) else "🔴"
+            kb.add(types.InlineKeyboardButton(f"{status_icon} {api['name']}", callback_data=f"toggle_api_{i}"))
+    kb.add(types.InlineKeyboardButton("🔙 Back to Admin", callback_data="admin_back"))
+    try:
+        bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=kb)
+    except Exception:
+        pass
+
+
+def process_add_points(message):
+    if message.text and message.text.strip() == "/cancel":
+        bot.send_message(message.chat.id, "❌ বাতিল করা হয়েছে।", reply_markup=main_menu())
+        return
+    try:
+        parts = message.text.strip().split()
+        if len(parts) < 2:
+            bot.send_message(message.chat.id, "❌ ফরম্যাট ভুল! লিখুন: <code>User_ID Amount</code>", reply_markup=main_menu())
+            return
+        uid = int(parts[0])
+        amt = int(parts[1])
+
+        new_pts = modify_user_points(uid, amt)
+        bot.send_message(message.chat.id, f"✅ <b>User {uid} কে +{amt} পয়েন্ট দেওয়া হয়েছে!</b>\nবর্তমান মোট পয়েন্ট: <b>{new_pts}</b>", reply_markup=main_menu())
+
+        try:
+            bot.send_message(uid, f"🎁 <b>অ্যাডমিন আপনাকে +{amt} পয়েন্ট যুক্ত করে দিয়েছেন!</b>\n💰 আপনার বর্তমান পয়েন্ট: <b>{new_pts}</b>")
+        except Exception:
+            pass
+    except ValueError:
+        bot.send_message(message.chat.id, "❌ সংখ্যা সঠিকভাবে দিন!", reply_markup=main_menu())
+
+
+def process_deduct_points(message):
+    if message.text and message.text.strip() == "/cancel":
+        bot.send_message(message.chat.id, "❌ বাতিল করা হয়েছে।", reply_markup=main_menu())
+        return
+    try:
+        parts = message.text.strip().split()
+        if len(parts) < 2:
+            bot.send_message(message.chat.id, "❌ ফরম্যাট ভুল! লিখুন: <code>User_ID Amount</code>", reply_markup=main_menu())
+            return
+        uid = int(parts[0])
+        amt = int(parts[1])
+
+        new_pts = modify_user_points(uid, -amt)
+        bot.send_message(message.chat.id, f"✅ <b>User {uid} থেকে -{amt} পয়েন্ট কাটা হয়েছে!</b>\nবর্তমান মোট পয়েন্ট: <b>{new_pts}</b>", reply_markup=main_menu())
+    except ValueError:
+        bot.send_message(message.chat.id, "❌ সংখ্যা সঠিকভাবে দিন!", reply_markup=main_menu())
+
+
+def process_check_user(message):
+    if message.text and message.text.strip() == "/cancel":
+        bot.send_message(message.chat.id, "❌ বাতিল করা হয়েছে।", reply_markup=main_menu())
+        return
+    try:
+        uid = int(message.text.strip())
+        pts = get_user_points(uid)
+        refs = referral_count(uid)
+        is_blk = is_blocked(uid)
+        is_vrf = is_verified(uid)
+
+        text = f"""
+<b>🔍 USER DETAILS</b>
+━━━━━━━━━━━━━━━━━━
+🆔 User ID: <code>{uid}</code>
+💰 Current Points: <b>{pts}</b>
+👥 Total Referrals: <b>{refs}</b>
+✅ Verified: <b>{'Yes' if is_vrf else 'No'}</b>
+🚫 Blocked: <b>{'Yes' if is_blk else 'No'}</b>
+━━━━━━━━━━━━━━━━━━
+"""
+        bot.send_message(message.chat.id, text, reply_markup=main_menu())
+    except ValueError:
+        bot.send_message(message.chat.id, "❌ অবৈধ User ID!", reply_markup=main_menu())
+
+
+def process_broadcast(message):
+    if message.text and message.text.strip() == "/cancel":
+        bot.send_message(message.chat.id, "❌ Broadcast বাতিল করা হয়েছে।", reply_markup=main_menu())
+        return
+
+    with data_lock:
+        users = list(DATA.get("users", []))
+
+    bot.send_message(message.chat.id, f"🚀 <b>{len(users)}</b> জন ইউজারের কাছে ব্রডকাস্ট শুরু হয়েছে...")
+
+    success = 0
+    failed = 0
+
+    for uid in users:
+        try:
+            bot.copy_message(uid, message.chat.id, message.message_id)
+            success += 1
+            time.sleep(0.05)
+        except Exception:
+            failed += 1
+
+    bot.send_message(
+        message.chat.id,
+        f"✅ <b>Broadcast সম্পন্ন হয়েছে!</b>\n\n🎯 সফল: {success}\n❌ ব্যর্থ: {failed}",
+        reply_markup=main_menu()
+    )
+
+
+def process_ban_user(message):
+    if message.text and message.text.strip() == "/cancel":
+        bot.send_message(message.chat.id, "❌ বাতিল করা হয়েছে।", reply_markup=main_menu())
+        return
+    try:
+        target_id = int(message.text.strip())
+        with data_lock:
+            blocked = DATA.setdefault("blocked", [])
+            if target_id not in blocked:
+                blocked.append(target_id)
+                save_data()
+        bot.send_message(message.chat.id, f"🚫 <b>User {target_id} সফলভাবে ব্যান করা হয়েছে!</b>", reply_markup=main_menu())
+    except ValueError:
+        bot.send_message(message.chat.id, "❌ অবৈধ User ID!", reply_markup=main_menu())
+
+
+def process_unban_user(message):
+    if message.text and message.text.strip() == "/cancel":
+        bot.send_message(message.chat.id, "❌ বাতিল করা হয়েছে।", reply_markup=main_menu())
+        return
+    try:
+        target_id = int(message.text.strip())
+        with data_lock:
+            blocked = DATA.setdefault("blocked", [])
+            if target_id in blocked:
+                blocked.remove(target_id)
+                save_data()
+        bot.send_message(message.chat.id, f"✅ <b>User {target_id} সফলভাবে আনব্যান করা হয়েছে!</b>", reply_markup=main_menu())
+    except ValueError:
+        bot.send_message(message.chat.id, "❌ অবৈধ User ID!", reply_markup=main_menu())
+
+
+# ============================================================
+# BOT COMMANDS & NAVIGATION
 # ============================================================
 
 @bot.message_handler(commands=["start"])
@@ -474,12 +743,12 @@ def help_command(message):
 
     bot.send_message(
         message.chat.id,
-        """
+        f"""
 <b>📚 HELP CENTER</b>
 ━━━━━━━━━━━━━━━━━━
-🤖 <b>AI CHAT:</b> প্রশ্ন লিখে পাঠান।
-🔗 <b>REFER:</b> নিজের referral link শেয়ার করুন।
-👤 <b>PROFILE:</b> নিজের Telegram তথ্য দেখুন।
+🤖 <b>AI CHAT:</b> প্রশ্ন লিখে পাঠান (খরচ: {COST_PER_MESSAGE} পয়েন্ট)।
+🔗 <b>REFER:</b> বন্ধুদের ইনভাইট করে প্রতি রেফারে +{REFERRAL_POINTS} পয়েন্ট পান।
+👤 <b>PROFILE:</b> নিজের ব্যালেন্স ও পয়েন্ট দেখুন।
 📊 <b>MY STATS:</b> নিজের পরিসংখ্যান দেখুন।
 🆘 <b>SUPPORT:</b> Support-এর সাথে যোগাযোগ করুন।
 ━━━━━━━━━━━━━━━━━━
@@ -504,17 +773,21 @@ def ai_chat(message):
         bot.send_message(message.chat.id, force_join_message(), reply_markup=force_join_keyboard())
         return
 
+    points = get_user_points(message.from_user.id)
+
     bot.send_message(
         message.chat.id,
-        """
+        f"""
 <b>🤖 AI CHAT MODE</b>
 ━━━━━━━━━━━━━━━━━━
+💰 আপনার পয়েন্ট: <b>{points}</b>
+💬 প্রতি মেসেজে খরচ: <b>{COST_PER_MESSAGE} Points</b>
+
 আপনার যেকোনো প্রশ্ন এখন লিখে পাঠান।
 
 উদাহরণ:
 <code>বাংলাদেশের রাজধানী কী?</code>
 <code>Python কী?</code>
-<code>একটি সুন্দর ফেসবুক ক্যাপশন লিখে দাও</code>
 ━━━━━━━━━━━━━━━━━━
 ❌ Main Menu-তে যেতে: /cancel
 """,
@@ -532,6 +805,7 @@ def profile(message):
     name = html.escape(user.first_name or "Not Set")
     username = "@" + user.username if user.username else "Not Set"
     count = referral_count(user.id)
+    points = get_user_points(user.id)
 
     text = f"""
 <b>👤 MY PROFILE</b>
@@ -539,7 +813,8 @@ def profile(message):
 👤 Name: <b>{name}</b>
 🔗 Username: <b>{html.escape(username)}</b>
 🆔 Telegram ID: <code>{user.id}</code>
-🎁 My Referrals: <b>{count}</b>
+💰 Current Points: <b>{points} Points</b>
+🎁 My Referrals: <b>{count} জন</b>
 ━━━━━━━━━━━━━━━━━━
 🤖 Premium AI User
 """
@@ -556,7 +831,7 @@ def refer_button(message):
     count = referral_count(message.from_user.id)
 
     keyboard = types.InlineKeyboardMarkup()
-    share_url = f"https://t.me/share/url?url={link}&text=🤖 Premium AI Assistant ব্যবহার করুন!"
+    share_url = f"https://t.me/share/url?url={link}&text=🤖 Premium AI Assistant ব্যবহার করুন এবং ফ্রি পয়েন্ট পান!"
     keyboard.add(types.InlineKeyboardButton("📤 SHARE REFERRAL LINK", url=share_url))
     keyboard.add(types.InlineKeyboardButton("📊 MY REFERRALS", callback_data="my_referrals"))
 
@@ -568,9 +843,10 @@ def refer_button(message):
 আপনার Personal Referral Link:
 <code>{link}</code>
 ━━━━━━━━━━━━━━━━━━
+🎁 প্রতি রেফারে পাবেন: <b>+{REFERRAL_POINTS} Points!</b>
 👥 Total Referrals: <b>{count}</b>
 
-বন্ধুদের এই Link পাঠান। তারা Bot-এ আসলে আপনার Referral যোগ হবে।
+বন্ধুদের এই Link পাঠান। তারা Bot-এ আসলে আপনার অ্যাকাউন্টে সরাসরি +{REFERRAL_POINTS} পয়েন্ট যুক্ত হবে।
 """,
         reply_markup=keyboard
     )
@@ -579,11 +855,12 @@ def refer_button(message):
 @bot.callback_query_handler(func=lambda call: call.data == "my_referrals")
 def my_referrals(call):
     count = referral_count(call.from_user.id)
+    pts = get_user_points(call.from_user.id)
     bot.answer_callback_query(call.id)
     try:
         bot.send_message(
             call.message.chat.id,
-            f"<b>📊 REFERRAL STATISTICS</b>\n━━━━━━━━━━━━━━━━━━\n👥 Successful Referrals: <b>{count}</b>\n🔗 Link: <code>{referral_link(call.from_user.id)}</code>"
+            f"<b>📊 REFERRAL STATISTICS</b>\n━━━━━━━━━━━━━━━━━━\n👥 Successful Referrals: <b>{count}</b>\n💰 Total Points: <b>{pts}</b>\n🔗 Link: <code>{referral_link(call.from_user.id)}</code>"
         )
     except Exception:
         pass
@@ -596,6 +873,7 @@ def my_stats(message):
         return
 
     count = referral_count(message.from_user.id)
+    points = get_user_points(message.from_user.id)
     with data_lock:
         total = len(DATA.get("users", []))
 
@@ -604,9 +882,10 @@ def my_stats(message):
         f"""
 <b>📊 MY STATISTICS</b>
 ━━━━━━━━━━━━━━━━━━
+💰 Your Points: <b>{points}</b>
 🎁 Your Referrals: <b>{count}</b>
 👥 Total Bot Users: <b>{total}</b>
-🟢 Bot Status: <b>ONLINE</b>
+🟢 Bot Status: <b>ONLINE (24/7)</b>
 ━━━━━━━━━━━━━━━━━━
 """,
         reply_markup=main_menu()
@@ -698,7 +977,7 @@ def identity_answer():
 
 
 # ============================================================
-# API CALL & HANDLING
+# API CALL & PARSING
 # ============================================================
 
 def extract_response(data):
@@ -828,7 +1107,7 @@ def ask_ai(question):
     return None
 
 
-def send_answer(chat_id, result):
+def send_answer(chat_id, result, remaining_points):
     api_name = html.escape(result["api"])
     answer = result["answer"]
     elapsed = result["time"]
@@ -837,7 +1116,7 @@ def send_answer(chat_id, result):
 
     text = (
         f"🤖 <b>{api_name}</b>\n"
-        f"⚡ <b>{elapsed:.2f}s</b>\n"
+        f"⚡ <b>{elapsed:.2f}s</b> | 💰 <b>বাকি পয়েন্ট: {remaining_points}</b>\n"
         f"━━━━━━━━━━━━━━━━━━\n\n"
         f"{safe_answer}"
     )
@@ -852,7 +1131,7 @@ def send_answer(chat_id, result):
 
 
 # ============================================================
-# USER TEXT HANDLER
+# USER TEXT HANDLER WITH POINT CHECKS
 # ============================================================
 
 @bot.message_handler(content_types=["text"])
@@ -876,6 +1155,19 @@ def user_message(message):
         return
 
     add_user(user_id)
+
+    # পয়েন্ট চেক (৩ পয়েন্ট আছে কি না)
+    user_points = get_user_points(user_id)
+    if user_points < COST_PER_MESSAGE:
+        bot.send_message(
+            message.chat.id,
+            f"⚠️ <b>আপনার পর্যাপ্ত পয়েন্ট নেই!</b>\n\n"
+            f"💰 বর্তমান পয়েন্ট: <b>{user_points}</b>\n"
+            f"💬 প্রতি মেসেজে প্রয়োজন: <b>{COST_PER_MESSAGE} Points</b>\n\n"
+            f"🎁 আরও পয়েন্ট পেতে আপনার রেফারেল লিংক বন্ধুদের পাঠান অথবা অ্যাডমিন {SUPPORT_USERNAME} এর সাথে যোগাযোগ করুন।",
+            reply_markup=main_menu()
+        )
+        return
 
     with data_lock:
         DATA["stats"]["messages"] = DATA["stats"].get("messages", 0) + 1
@@ -903,10 +1195,13 @@ def user_message(message):
         pass
 
     if result:
+        # উত্তর সফল হলে ৩ পয়েন্ট কাটা হবে
+        remaining = modify_user_points(user_id, -COST_PER_MESSAGE)
+
         with data_lock:
             DATA["stats"]["success"] = DATA["stats"].get("success", 0) + 1
         save_data()
-        send_answer(chat_id, result)
+        send_answer(chat_id, result, remaining)
     else:
         with data_lock:
             DATA["stats"]["failed"] = DATA["stats"].get("failed", 0) + 1
@@ -931,18 +1226,20 @@ def unsupported_message(message):
 
 
 # ============================================================
-# BOT RUNNER
+# BOT RUNNER LOOP
 # ============================================================
 
 def run_bot():
     print()
     print("=" * 60)
-    print("       PREMIUM MULTI AI TELEGRAM BOT")
+    print("       PREMIUM MULTI AI TELEGRAM BOT + POINTS SYSTEM")
     print("=" * 60)
     print(f"Owner         : {OWNER_NAME} ({SUPPORT_USERNAME})")
-    print(f"Workers       : {MAX_WORKERS}")
-    print(f"Timeout       : {API_TIMEOUT}s")
-    print(f"Status        : ONLINE")
+    print(f"Admin ID      : {ADMIN_ID}")
+    print(f"Join Bonus    : {INITIAL_POINTS} Points")
+    print(f"Cost / Msg    : {COST_PER_MESSAGE} Points")
+    print(f"Ref Bonus     : {REFERRAL_POINTS} Points")
+    print(f"Status        : ONLINE (24/7)")
     print("=" * 60)
     print()
 
